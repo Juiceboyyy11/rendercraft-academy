@@ -472,8 +472,8 @@ export default function CourseDetailPage() {
               .insert({
                 section_id: lesson.section_id,
                 title: 'Week Assignment',
-                description: lesson.assignment_text,
-                instructions: lesson.assignment_text,
+                description: lesson.description || 'Complete the assignment for this lesson',
+                instructions: lesson.description || 'Complete the assignment for this lesson',
                 assignment_order: 1,
                 is_published: true
               })
