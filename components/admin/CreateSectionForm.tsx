@@ -36,7 +36,7 @@ export default function CreateSectionForm({ courseId, onClose, onSuccess }: Crea
         title: formData.title,
         description: formData.description,
         section_order: formData.section_order,
-        is_published: formData.is_published
+        is_published: true
       })
 
       const { data, error } = await supabase

@@ -14,7 +14,7 @@ import EditSectionForm from './EditSectionForm'
 interface Course {
   id: string
   title: string
-  description: string
+  description: string | null
   thumbnail_url: string | null
   price: number
   is_free: boolean
@@ -99,16 +99,18 @@ export default function CourseManagement() {
       console.log('Fetching courses after section update - checking for updated sections')
 
       // Sort sections, lessons, and assignments by their order
-      const sortedCourses = coursesData?.map(course => ({
-        ...course,
-        course_sections: course.course_sections
-          ?.sort((a, b) => a.section_order - b.section_order)
-          .map(section => ({
+      const sortedCourses = coursesData?.map(course => {
+        const sortedSections = course.course_sections?.sort((a: CourseSection, b: CourseSection) => a.section_order - b.section_order) || []
+        
+        return {
+          ...course,
+          course_sections: sortedSections.map((section: CourseSection) => ({
             ...section,
-            lessons: section.lessons?.sort((a, b) => a.lesson_order - b.lesson_order) || [],
-            assignments: section.assignments?.sort((a, b) => a.assignment_order - b.assignment_order) || []
-          })) || []
-      })) || []
+            lessons: section.lessons?.sort((a: Lesson, b: Lesson) => a.lesson_order - b.lesson_order) || [],
+            assignments: section.assignments?.sort((a: Assignment, b: Assignment) => a.assignment_order - b.assignment_order) || []
+          }))
+        }
+      }) || []
 
       console.log('Processed courses data:', sortedCourses)
       console.log('Setting courses state with updated data')
