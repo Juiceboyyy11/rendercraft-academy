@@ -5,10 +5,6 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Next.js static export configuration
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-
 # Redirects for SPA routing
 [[redirects]]
   from = "/*"
