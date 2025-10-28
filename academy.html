@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RenderCraft Academy - Learn 3D Animation</title>
+    <link rel="stylesheet" href="academy-styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sentek:wght@400;500;600;700;800;900&display=swap">
+</head>
+<body>
+    <!-- Academy Navigation -->
+    <nav class="academy-navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="academy.html">
+                    <div class="brand-text">RENDERCRAFT ACADEMY</div>
+                </a>
+            </div>
+            
+            <div class="nav-center">
+                <a href="index.html" class="back-to-site">← Back to Studio</a>
+            </div>
+            
+            <div class="nav-user" id="navUser">
+                <div class="user-info" id="userInfo" style="display: none;">
+                    <span class="user-name" id="userName">Student</span>
+                    <div class="user-menu">
+                        <button class="user-btn" id="userMenuBtn">▼</button>
+                        <div class="user-dropdown" id="userDropdown">
+                            <a href="#" onclick="showDashboard()">My Dashboard</a>
+                            <a href="#" onclick="showProgress()">My Progress</a>
+                            <a href="#" onclick="logout()">Logout</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="auth-buttons" id="authButtons">
+                    <button class="btn-login" onclick="showLogin()">Login</button>
+                    <button class="btn-register" onclick="showRegister()">Register</button>
+                </div>
+            </div>
+            
+            <button class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Student Login</h2>
+                <span class="close" onclick="closeModal('loginModal')">&times;</span>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn-primary">Sign In</button>
+                <p class="form-switch">Don't have an account? <a href="#" onclick="switchToRegister()">Register here</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Student Registration</h2>
+                <span class="close" onclick="closeModal('registerModal')">&times;</span>
+            </div>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerConfirmPassword">Confirm Password</label>
+                    <input type="password" id="registerConfirmPassword" required>
+                </div>
+                <button type="submit" class="btn-primary">Register</button>
+                <p class="form-switch">Already have an account? <a href="#" onclick="switchToLogin()">Sign in here</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="academy-main">
+        <!-- Hero Section -->
+        <section class="academy-hero">
+            <div class="hero-content">
+                <h1 class="hero-title">Master 3D Animation</h1>
+                <p class="hero-subtitle">Learn professional 3D animation techniques from industry experts</p>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-number">500+</span>
+                        <span class="stat-label">Students</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">50+</span>
+                        <span class="stat-label">Lessons</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">4.9</span>
+                        <span class="stat-label">Rating</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Courses Section -->
+        <section class="courses-section" id="coursesSection">
+            <div class="container">
+                <h2 class="section-title">Available Courses</h2>
+                <div class="courses-grid" id="coursesGrid">
+                    <!-- Courses will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Student Dashboard (Hidden by default) -->
+        <section class="dashboard-section" id="dashboardSection" style="display: none;">
+            <div class="container">
+                <div class="dashboard-header">
+                    <h2 class="section-title">My Dashboard</h2>
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <span class="stat-number" id="enrolledCourses">0</span>
+                            <span class="stat-label">Enrolled Courses</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="completedLessons">0</span>
+                            <span class="stat-label">Completed Lessons</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="assignmentsSubmitted">0</span>
+                            <span class="stat-label">Assignments</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-content">
+                    <div class="my-courses">
+                        <h3>My Courses</h3>
+                        <div class="enrolled-courses" id="enrolledCoursesList">
+                            <!-- Enrolled courses will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <div class="recent-activity">
+                        <h3>Recent Activity</h3>
+                        <div class="activity-list" id="activityList">
+                            <!-- Recent activity will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Course Detail Modal -->
+        <div class="modal" id="courseModal">
+            <div class="modal-content course-modal">
+                <div class="modal-header">
+                    <h2 id="courseModalTitle">Course Details</h2>
+                    <span class="close" onclick="closeModal('courseModal')">&times;</span>
+                </div>
+                <div class="course-detail-content" id="courseDetailContent">
+                    <!-- Course details will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Lesson Player Modal -->
+        <div class="modal" id="lessonModal">
+            <div class="modal-content lesson-modal">
+                <div class="modal-header">
+                    <h2 id="lessonModalTitle">Lesson</h2>
+                    <span class="close" onclick="closeModal('lessonModal')">&times;</span>
+                </div>
+                <div class="lesson-content" id="lessonContent">
+                    <!-- Lesson content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="academy-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <h3>RENDERCRAFT ACADEMY</h3>
+                    <p>Master the art of 3D animation</p>
+                </div>
+                <div class="footer-links">
+                    <a href="index.html">Back to Studio</a>
+                    <a href="contact.html">Contact</a>
+                    <a href="#" onclick="showSupport()">Support</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 RenderCraft Studio. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="academy-script.js"></script>
+</body>
+</html>

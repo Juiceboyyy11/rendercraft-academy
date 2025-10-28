@@ -1,0 +1,12 @@
+export default function TestPage() {
+  return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-4">Test Page</h1>
+        <p className="text-xl mb-4">Dynamic routing is working!</p>
+        <a href="/" className="text-blue-400 hover:text-blue-300">Back to Home</a>
+      </div>
+    </div>
+  )
+}
+
