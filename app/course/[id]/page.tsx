@@ -927,13 +927,13 @@ export default function CourseDetailPage() {
                             // First, try to find a separate assignment in the assignments table
                             const weekAssignment = assignments.find(a => a.section_id === lesson.section_id)
                             
-                            // If no separate assignment exists, use the lesson's assignment_text
-                            if (!weekAssignment && lesson.assignment_text) {
-                              // Create a virtual assignment object for the lesson's assignment_text
+                            // If no separate assignment exists, use the lesson's description
+                            if (!weekAssignment && lesson.description) {
+                              // Create a virtual assignment object for the lesson's description
                               const virtualAssignment = {
                                 id: `lesson-${lesson.id}`,
                                 title: 'Week Assignment',
-                                description: lesson.assignment_text,
+                                description: lesson.description,
                                 section_id: lesson.section_id
                               }
                               
@@ -943,7 +943,7 @@ export default function CourseDetailPage() {
                                 <div>
                                   <div 
                                     className="text-white/70 mb-4 prose prose-invert prose-sm max-w-none"
-                                    dangerouslySetInnerHTML={{ __html: lesson.assignment_text }}
+                                    dangerouslySetInnerHTML={{ __html: lesson.description || 'No assignment description available' }}
                                   />
                                   
                                   {submission ? (
