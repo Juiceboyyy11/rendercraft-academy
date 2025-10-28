@@ -856,8 +856,6 @@ export default function CourseDetailPage() {
                               className="w-full h-full absolute inset-0"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                               allowFullScreen
-                              webkitAllowFullScreen
-                              mozAllowFullScreen
                               frameBorder="0"
                               loading="lazy"
                               style={{ 
