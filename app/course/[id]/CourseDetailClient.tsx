@@ -201,6 +201,48 @@ export default function CourseDetailClient() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   }
 
+  const getYouTubeEmbedUrl = (url: string) => {
+    // If already an embed URL, return as is
+    if (url.includes('/embed/')) {
+      return url
+    }
+    
+    // Extract video ID from various YouTube URL formats
+    let videoId = ''
+    
+    // youtube.com/watch?v=VIDEO_ID
+    const watchMatch = url.match(/(?:youtube\.com\/watch\?v=)([^&]+)/)
+    if (watchMatch) {
+      videoId = watchMatch[1]
+    }
+    
+    // youtube.com/shorts/VIDEO_ID (YouTube Shorts)
+    const shortsMatch = url.match(/(?:youtube\.com\/shorts\/)([^?]+)/)
+    if (shortsMatch) {
+      videoId = shortsMatch[1]
+    }
+    
+    // youtu.be/VIDEO_ID
+    const beMatch = url.match(/(?:youtu\.be\/)([^?]+)/)
+    if (beMatch) {
+      videoId = beMatch[1]
+    }
+    
+    // youtube.com/embed/VIDEO_ID (already embed)
+    const embedMatch = url.match(/(?:youtube\.com\/embed\/)([^?]+)/)
+    if (embedMatch) {
+      videoId = embedMatch[1]
+    }
+    
+    // If we found a video ID, return embed URL
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`
+    }
+    
+    // If no match, return original URL
+    return url
+  }
+
   const getLessonsForSection = (sectionId: string) => {
     return lessons.filter(lesson => lesson.section_id === sectionId)
   }
@@ -391,9 +433,10 @@ export default function CourseDetailClient() {
               {selectedLesson.video_url ? (
                 <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-6">
                   <iframe
-                    src={selectedLesson.video_url}
+                    src={getYouTubeEmbedUrl(selectedLesson.video_url)}
                     title={selectedLesson.title}
                     className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                   />
                 </div>

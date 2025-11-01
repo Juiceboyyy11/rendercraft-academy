@@ -3,7 +3,7 @@ import CourseDetailClient from '@/app/course/[id]/CourseDetailClient'
 
 // Generate static params for all published courses
 export async function generateStaticParams() {
-  try {
+    try {
     const { data: courses } = await supabase
         .from('courses')
       .select('id')
