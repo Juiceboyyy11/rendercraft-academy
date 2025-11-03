@@ -70,6 +70,8 @@ export default function CourseManagement() {
   const [editingLesson, setEditingLesson] = useState<any>(null)
   const [editingSection, setEditingSection] = useState<any>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [lessonCompletions, setLessonCompletions] = useState<Record<string, Array<{ user_id: string; user_name: string; completed_at: string }>>>({})
+  const [expandedLesson, setExpandedLesson] = useState<string | null>(null)
 
   useEffect(() => {
     fetchCourses()
@@ -115,11 +117,81 @@ export default function CourseManagement() {
       console.log('Processed courses data:', sortedCourses)
       console.log('Setting courses state with updated data')
       setCourses(sortedCourses)
+
+      // Fetch lesson completions for all lessons
+      await fetchLessonCompletions(sortedCourses)
     } catch (error) {
       console.error('Error fetching courses:', error)
       setCourses([]) // Set empty array on error to prevent crashes
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchLessonCompletions = async (coursesData: Course[]) => {
+    try {
+      // Get all lesson IDs from all courses
+      const allLessonIds: string[] = []
+      coursesData.forEach(course => {
+        course.course_sections?.forEach(section => {
+          section.lessons?.forEach(lesson => {
+            allLessonIds.push(lesson.id)
+          })
+        })
+      })
+
+      if (allLessonIds.length === 0) {
+        setLessonCompletions({})
+        return
+      }
+
+      // Fetch lesson completions with user names
+      const { data: completionsData, error: completionsError } = await supabase
+        .from('lesson_progress')
+        .select(`
+          lesson_id,
+          completed_at,
+          user_id,
+          users (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .in('lesson_id', allLessonIds)
+        .order('completed_at', { ascending: false })
+
+      if (completionsError) {
+        console.error('Error fetching lesson completions:', completionsError)
+        return
+      }
+
+      // Organize completions by lesson_id
+      const completionsByLesson: Record<string, Array<{ user_id: string; user_name: string; completed_at: string }>> = {}
+      
+      completionsData?.forEach((completion: any) => {
+        const lessonId = completion.lesson_id
+        if (!completionsByLesson[lessonId]) {
+          completionsByLesson[lessonId] = []
+        }
+        
+        // Handle user data - could be object or array
+        const user = Array.isArray(completion.users) ? completion.users[0] : completion.users
+        const userId = user?.id || completion.user_id
+        const userName = user?.full_name || user?.email || 'Anonymous'
+        
+        if (userId) {
+          completionsByLesson[lessonId].push({
+            user_id: userId,
+            user_name: userName,
+            completed_at: completion.completed_at
+          })
+        }
+      })
+      
+      setLessonCompletions(completionsByLesson)
+    } catch (error) {
+      console.error('Error fetching lesson completions:', error)
     }
   }
 
@@ -666,33 +738,76 @@ export default function CourseManagement() {
                                     <span>Lessons ({section.lessons?.length || 0})</span>
                                   </h5>
                                   <div className="space-y-1">
-                                    {section.lessons?.map((lesson) => (
-                                      <div key={lesson.id} className="flex items-center justify-between bg-white/5 rounded p-2">
-                                        <div className="flex items-center space-x-2">
-                                          <Play size={12} className="text-white/70" />
-                                          <span className="text-xs text-white">{lesson.title}</span>
+                                    {section.lessons?.map((lesson) => {
+                                      const completions = lessonCompletions[lesson.id] || []
+                                      const isExpanded = expandedLesson === lesson.id
+                                      
+                                      return (
+                                        <div key={lesson.id} className="bg-white/5 rounded p-2">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-2 flex-1">
+                                              <Play size={12} className="text-white/70" />
+                                              <span className="text-xs text-white">{lesson.title}</span>
+                                              {completions.length > 0 && (
+                                                <button
+                                                  onClick={() => setExpandedLesson(isExpanded ? null : lesson.id)}
+                                                  className="ml-2 px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center space-x-1"
+                                                  title={`${completions.length} user${completions.length === 1 ? '' : 's'} completed this lesson`}
+                                                >
+                                                  <Users size={10} />
+                                                  <span>{completions.length}</span>
+                                                </button>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                              <span className="px-1 py-0.5 rounded text-xs bg-green-500/20 text-green-400">
+                                                Live
+                                              </span>
+                                              <button
+                                                onClick={() => editLesson(lesson)}
+                                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                                title="Edit Video"
+                                              >
+                                                <Edit size={8} className="text-white/70 sm:w-2.5 sm:h-2.5" />
+                                              </button>
+                                              <button
+                                                onClick={() => deleteLesson(lesson.id)}
+                                                className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                                                title="Delete Video"
+                                              >
+                                                <Trash2 size={8} className="text-red-400 sm:w-2.5 sm:h-2.5" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Completed Users List */}
+                                          {isExpanded && completions.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-white/10">
+                                              <h6 className="text-xs font-medium text-white/80 mb-2 flex items-center space-x-1">
+                                                <Users size={10} />
+                                                <span>Completed by ({completions.length} {completions.length === 1 ? 'user' : 'users'})</span>
+                                              </h6>
+                                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                {completions.map((completion, index) => (
+                                                  <div key={index} className="flex items-center justify-between text-xs bg-white/5 rounded p-1.5">
+                                                    <span className="text-white/90">{completion.user_name}</span>
+                                                    <span className="text-white/60">
+                                                      {new Date(completion.completed_at).toLocaleDateString()}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                          
+                                          {isExpanded && completions.length === 0 && (
+                                            <div className="mt-2 pt-2 border-t border-white/10">
+                                              <p className="text-xs text-white/60">No users have completed this lesson yet.</p>
+                                            </div>
+                                          )}
                                         </div>
-                                        <div className="flex items-center space-x-2">
-                                          <span className="px-1 py-0.5 rounded text-xs bg-green-500/20 text-green-400">
-                                            Live
-                                          </span>
-                                          <button
-                                            onClick={() => editLesson(lesson)}
-                                            className="p-1 hover:bg-white/10 rounded transition-colors"
-                                            title="Edit Video"
-                                          >
-                                            <Edit size={8} className="text-white/70 sm:w-2.5 sm:h-2.5" />
-                                          </button>
-                                          <button
-                                            onClick={() => deleteLesson(lesson.id)}
-                                            className="p-1 hover:bg-red-500/20 rounded transition-colors"
-                                            title="Delete Video"
-                                          >
-                                            <Trash2 size={8} className="text-red-400 sm:w-2.5 sm:h-2.5" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
+                                      )
+                                    })}
                                     
                                     {/* Add Video Button */}
                                     <button
