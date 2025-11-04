@@ -86,6 +86,7 @@ export default function CourseDetailClient() {
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<Record<string, any>>({})
   const [lessonCompletions, setLessonCompletions] = useState<Record<string, Array<{ user_id: string; user_name: string; completed_at: string }>>>({})
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [videoLoadError, setVideoLoadError] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (courseId) {
@@ -104,6 +105,19 @@ export default function CourseDetailClient() {
 
     return () => subscription.unsubscribe()
   }, [courseId])
+
+  // Detect if video iframe fails to load after timeout
+  useEffect(() => {
+    if (selectedLesson?.video_url && !videoLoadError[selectedLesson.id]) {
+      const timeout = setTimeout(() => {
+        // Check if iframe is actually loaded (this is a fallback)
+        // Note: Cross-origin restrictions prevent checking iframe content
+        // So we'll show a manual button for users to report issues
+      }, 5000) // 5 second timeout
+
+      return () => clearTimeout(timeout)
+    }
+  }, [selectedLesson, videoLoadError])
 
   const checkAdminStatus = async () => {
     try {
@@ -294,6 +308,8 @@ export default function CourseDetailClient() {
     }
     setSelectedLesson(lesson)
     setSidebarOpen(false)
+    // Reset video load error when switching lessons
+    setVideoLoadError(prev => ({ ...prev, [lesson.id]: false }))
   }
 
   const canAccessLesson = (lessonId: string): boolean => {
@@ -377,44 +393,53 @@ export default function CourseDetailClient() {
   }
 
   const getYouTubeEmbedUrl = (url: string) => {
-    // If already an embed URL, return as is
+    if (!url) return ''
+    
+    // If already an embed URL, return as is (but ensure it has proper params)
     if (url.includes('/embed/')) {
-      return url
+      // Ensure it has the necessary parameters for better compatibility
+      const embedUrl = new URL(url)
+      embedUrl.searchParams.set('rel', '0')
+      embedUrl.searchParams.set('modestbranding', '1')
+      embedUrl.searchParams.set('playsinline', '1')
+      embedUrl.searchParams.set('enablejsapi', '1')
+      return embedUrl.toString()
     }
     
     // Extract video ID from various YouTube URL formats
     let videoId = ''
     
-    // youtube.com/watch?v=VIDEO_ID
+    // youtube.com/watch?v=VIDEO_ID or youtube.com/watch?v=VIDEO_ID&t=...
     const watchMatch = url.match(/(?:youtube\.com\/watch\?v=)([^&]+)/)
     if (watchMatch) {
       videoId = watchMatch[1]
     }
     
     // youtube.com/shorts/VIDEO_ID (YouTube Shorts)
-    const shortsMatch = url.match(/(?:youtube\.com\/shorts\/)([^?]+)/)
+    const shortsMatch = url.match(/(?:youtube\.com\/shorts\/)([^?\/]+)/)
     if (shortsMatch) {
       videoId = shortsMatch[1]
     }
     
     // youtu.be/VIDEO_ID
-    const beMatch = url.match(/(?:youtu\.be\/)([^?]+)/)
+    const beMatch = url.match(/(?:youtu\.be\/)([^?\/]+)/)
     if (beMatch) {
       videoId = beMatch[1]
     }
     
     // youtube.com/embed/VIDEO_ID (already embed)
-    const embedMatch = url.match(/(?:youtube\.com\/embed\/)([^?]+)/)
+    const embedMatch = url.match(/(?:youtube\.com\/embed\/)([^?\/]+)/)
     if (embedMatch) {
       videoId = embedMatch[1]
     }
     
-    // If we found a video ID, return embed URL
-    if (videoId) {
-      return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`
+    // If we found a video ID, return embed URL with proper parameters
+    if (videoId && videoId.length === 11) {
+      return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`
     }
     
-    // If no match, return original URL
+    // If no match, return original URL (might be a different video platform)
+    console.warn('Could not extract YouTube video ID from:', url)
     return url
   }
 
@@ -713,14 +738,66 @@ export default function CourseDetailClient() {
               </div>
 
               {selectedLesson.video_url ? (
-                <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-6">
-                  <iframe
-                    src={getYouTubeEmbedUrl(selectedLesson.video_url)}
-                    title={selectedLesson.title}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
+                <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-6 relative">
+                  {!videoLoadError[selectedLesson.id] ? (
+                    <iframe
+                      src={getYouTubeEmbedUrl(selectedLesson.video_url)}
+                      title={selectedLesson.title}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      onLoad={() => {
+                        console.log('Video iframe loaded successfully')
+                        setVideoLoadError(prev => ({ ...prev, [selectedLesson.id]: false }))
+                      }}
+                      onError={() => {
+                        console.error('Video iframe error')
+                        setVideoLoadError(prev => ({ ...prev, [selectedLesson.id]: true }))
+                      }}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/90">
+                      <div className="text-center p-6 max-w-md">
+                        <Video className="w-16 h-16 text-white/50 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-white mb-2">Video Not Loading</h3>
+                        <p className="text-white/70 mb-4">
+                          The video may be blocked by your network, ad blocker, or privacy settings.
+                        </p>
+                        <div className="space-y-2">
+                          <a
+                            href={selectedLesson.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block px-6 py-3 bg-white text-black rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                          >
+                            Watch on YouTube ↗
+                          </a>
+                          <div className="text-white/60 text-sm mt-4">
+                            <p className="mb-1">Troubleshooting:</p>
+                            <ul className="text-left text-xs space-y-1 ml-4">
+                              <li>• Disable ad blockers</li>
+                              <li>• Check network/firewall settings</li>
+                              <li>• Try a different browser</li>
+                              <li>• Verify video allows embedding</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Fallback button - visible if video appears blank */}
+                  <div className="absolute bottom-4 right-4">
+                    <button
+                      onClick={() => {
+                        setVideoLoadError(prev => ({ ...prev, [selectedLesson.id]: true }))
+                      }}
+                      className="px-4 py-2 bg-red-500/80 text-white text-sm rounded-lg hover:bg-red-600 transition-colors shadow-lg"
+                      title="Click if video is not loading"
+                    >
+                      Video Not Loading?
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center mb-6">
