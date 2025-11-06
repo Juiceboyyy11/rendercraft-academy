@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { isAdmin } from '@/lib/admin'
-import { 
-  Play, 
+import {
+  Play,
   ArrowLeft,
   Video,
   BookOpen,
@@ -15,8 +14,6 @@ import {
   X,
   ChevronDown,
   ChevronRight,
-  CheckCircle,
-  Circle,
   FileText
 } from 'lucide-react'
 
@@ -82,57 +79,13 @@ export default function CourseDetailClient() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const [selectedSection, setSelectedSection] = useState<CourseSection | null>(null)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-  const [lessonProgress, setLessonProgress] = useState<Record<string, boolean>>({})
-  const [assignmentSubmissions, setAssignmentSubmissions] = useState<Record<string, any>>({})
-  const [lessonCompletions, setLessonCompletions] = useState<Record<string, Array<{ user_id: string; user_name: string; completed_at: string }>>>({})
-  const [isAdminUser, setIsAdminUser] = useState(false)
   const [videoLoadError, setVideoLoadError] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (courseId) {
       fetchCourseData()
-      checkAdminStatus()
     }
-
-    // Listen for auth changes to update admin status
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        isAdmin(session.user.id).then(setIsAdminUser)
-      } else {
-        setIsAdminUser(false)
-      }
-    })
-
-    return () => subscription.unsubscribe()
   }, [courseId])
-
-  // Detect if video iframe fails to load after timeout
-  useEffect(() => {
-    if (selectedLesson?.video_url && !videoLoadError[selectedLesson.id]) {
-      const timeout = setTimeout(() => {
-        // Check if iframe is actually loaded (this is a fallback)
-        // Note: Cross-origin restrictions prevent checking iframe content
-        // So we'll show a manual button for users to report issues
-      }, 5000) // 5 second timeout
-
-      return () => clearTimeout(timeout)
-    }
-  }, [selectedLesson, videoLoadError])
-
-  const checkAdminStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        const adminStatus = await isAdmin(session.user.id)
-        setIsAdminUser(adminStatus)
-      } else {
-        setIsAdminUser(false)
-      }
-    } catch (error) {
-      console.error('Error checking admin status:', error)
-      setIsAdminUser(false)
-    }
-  }
 
   const fetchCourseData = async () => {
     try {
@@ -201,77 +154,6 @@ export default function CourseDetailClient() {
           setAssignments(assignmentsData || [])
         }
 
-        // Fetch lesson completions with user names (only if admin)
-        // First check if user is admin, then fetch if they are
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user && await isAdmin(session.user.id)) {
-          if (lessonsData && lessonsData.length > 0) {
-            const lessonIds = lessonsData.map(lesson => lesson.id)
-            const { data: completionsData, error: completionsError } = await supabase
-              .from('lesson_progress')
-              .select(`
-                lesson_id,
-                completed_at,
-                user_id,
-                users (
-                  id,
-                  full_name,
-                  email
-                )
-              `)
-              .in('lesson_id', lessonIds)
-              .order('completed_at', { ascending: false })
-
-            if (completionsError) {
-              console.error('Error fetching lesson completions:', completionsError)
-            } else {
-              // Organize completions by lesson_id
-              const completionsByLesson: Record<string, Array<{ user_id: string; user_name: string; completed_at: string }>> = {}
-              
-              completionsData?.forEach((completion: any) => {
-                const lessonId = completion.lesson_id
-                if (!completionsByLesson[lessonId]) {
-                  completionsByLesson[lessonId] = []
-                }
-                
-                // Handle user data - could be object or array
-                const user = Array.isArray(completion.users) ? completion.users[0] : completion.users
-                const userId = user?.id || completion.user_id
-                const userName = user?.full_name || user?.email || 'Anonymous'
-                
-                if (userId) {
-                  completionsByLesson[lessonId].push({
-                    user_id: userId,
-                    user_name: userName,
-                    completed_at: completion.completed_at
-                  })
-                }
-              })
-              
-              setLessonCompletions(completionsByLesson)
-            }
-          }
-        }
-
-        // Update lesson progress state for current user (always fetch for progress tracking)
-        if (session?.user) {
-          if (lessonsData && lessonsData.length > 0) {
-            const lessonIds = lessonsData.map(lesson => lesson.id)
-            const { data: userProgressData, error: userProgressError } = await supabase
-              .from('lesson_progress')
-              .select('lesson_id')
-              .in('lesson_id', lessonIds)
-              .eq('user_id', session.user.id)
-
-            if (!userProgressError && userProgressData) {
-              const userProgress: Record<string, boolean> = {}
-              userProgressData.forEach((progress: any) => {
-                userProgress[progress.lesson_id] = true
-              })
-              setLessonProgress(userProgress)
-            }
-          }
-        }
       }
 
       // Auto-expand first section
@@ -301,83 +183,9 @@ export default function CourseDetailClient() {
   }
 
   const selectLesson = (lesson: Lesson) => {
-    // Check if user can access this lesson (previous lessons must be completed)
-    if (!canAccessLesson(lesson.id)) {
-      alert('Click on the "Mark as complete" button below to move to the next lesson.')
-      return
-    }
     setSelectedLesson(lesson)
     setSidebarOpen(false)
-    // Reset video load error when switching lessons
     setVideoLoadError(prev => ({ ...prev, [lesson.id]: false }))
-  }
-
-  const canAccessLesson = (lessonId: string): boolean => {
-    // Get all lessons sorted by section_order and lesson_order across all sections
-    const allLessonsSorted: Lesson[] = []
-    
-    // Sort sections by order
-    const sortedSections = [...sections].sort((a, b) => a.section_order - b.section_order)
-    
-    // Collect lessons from each section in order
-    sortedSections.forEach(section => {
-      const sectionLessons = getLessonsForSection(section.id)
-      const sortedSectionLessons = [...sectionLessons].sort((a, b) => a.lesson_order - b.lesson_order)
-      allLessonsSorted.push(...sortedSectionLessons)
-    })
-    
-    // Find the index of the lesson in the sorted array
-    const lessonIndex = allLessonsSorted.findIndex(l => l.id === lessonId)
-    
-    // If lesson not found or it's the first lesson, allow access
-    if (lessonIndex <= 0) {
-      return true
-    }
-    
-    // Check if all previous lessons (across all sections) are completed
-    for (let i = 0; i < lessonIndex; i++) {
-      if (!lessonProgress[allLessonsSorted[i].id]) {
-        return false // Previous lesson not completed
-      }
-    }
-    
-    return true // All previous lessons completed
-  }
-
-  const getNextLesson = (): Lesson | null => {
-    if (!selectedLesson) return null
-    
-    // Get all lessons sorted by section_order and lesson_order across all sections
-    const allLessonsSorted: Lesson[] = []
-    const sortedSections = [...sections].sort((a, b) => a.section_order - b.section_order)
-    
-    sortedSections.forEach(section => {
-      const sectionLessons = getLessonsForSection(section.id)
-      const sortedSectionLessons = [...sectionLessons].sort((a, b) => a.lesson_order - b.lesson_order)
-      allLessonsSorted.push(...sortedSectionLessons)
-    })
-    
-    const currentIndex = allLessonsSorted.findIndex(l => l.id === selectedLesson.id)
-    if (currentIndex >= 0 && currentIndex < allLessonsSorted.length - 1) {
-      return allLessonsSorted[currentIndex + 1]
-    }
-    return null
-  }
-
-  const canNavigateNext = (): boolean => {
-    if (!selectedLesson) return false
-    
-    // Current lesson must be completed to go to next
-    if (!lessonProgress[selectedLesson.id]) {
-      return false
-    }
-    
-    // Check if there's a next lesson
-    const nextLesson = getNextLesson()
-    if (!nextLesson) return false
-    
-    // Check if next lesson is accessible (all previous completed)
-    return canAccessLesson(nextLesson.id)
   }
 
   const selectSection = (section: CourseSection) => {
@@ -451,120 +259,37 @@ export default function CourseDetailClient() {
     return assignments.filter(assignment => assignment.section_id === sectionId)
   }
 
-  const markLessonComplete = async (lessonId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.error('User not logged in')
-        return
-      }
+  const getAllLessonsSorted = (): Lesson[] => {
+    const sortedSections = [...sections].sort((a, b) => a.section_order - b.section_order)
+    const allLessons: Lesson[] = []
 
-      const { error } = await supabase
-        .from('lesson_progress')
-        .upsert({
-          lesson_id: lessonId,
-          user_id: user.id,
-          completed_at: new Date().toISOString()
-        })
+    sortedSections.forEach(section => {
+      const sectionLessons = getLessonsForSection(section.id)
+      const sortedSectionLessons = [...sectionLessons].sort((a, b) => a.lesson_order - b.lesson_order)
+      allLessons.push(...sortedSectionLessons)
+    })
 
-      if (error) {
-        console.error('Error marking lesson complete:', error)
-        return
-      }
-
-      // Update lesson progress state
-      setLessonProgress(prev => ({
-        ...prev,
-        [lessonId]: true
-      }))
-
-      // Only update lesson completions state if user is admin
-      if (isAdminUser) {
-        // Fetch updated completion data with user name
-        const { data: userData } = await supabase
-          .from('users')
-          .select('full_name, email')
-          .eq('id', user.id)
-          .single()
-
-        const userName = userData?.full_name || userData?.email || 'Anonymous'
-
-        // Update lesson completions state
-        setLessonCompletions(prev => {
-          const updated = { ...prev }
-          if (!updated[lessonId]) {
-            updated[lessonId] = []
-          }
-          // Check if user already in list (to avoid duplicates)
-          const userExists = updated[lessonId].some(c => c.user_id === user.id)
-          if (!userExists) {
-            updated[lessonId] = [{
-              user_id: user.id,
-              user_name: userName,
-              completed_at: new Date().toISOString()
-            }, ...updated[lessonId]]
-          }
-          return updated
-        })
-      }
-    } catch (err) {
-      console.error('Error updating lesson progress:', err)
-    }
+    return allLessons
   }
 
-  const unmarkLessonComplete = async (lessonId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.error('User not logged in')
-        return
-      }
-
-      // Delete the lesson progress record
-      const { error } = await supabase
-        .from('lesson_progress')
-        .delete()
-        .eq('lesson_id', lessonId)
-        .eq('user_id', user.id)
-
-      if (error) {
-        console.error('Error unmarking lesson complete:', error)
-        return
-      }
-
-      // Update lesson progress state
-      setLessonProgress(prev => {
-        const updated = { ...prev }
-        delete updated[lessonId]
-        return updated
-      })
-
-      // Only update lesson completions state if user is admin
-      if (isAdminUser) {
-        setLessonCompletions(prev => {
-          const updated = { ...prev }
-          if (updated[lessonId]) {
-            // Remove current user from completions list
-            updated[lessonId] = updated[lessonId].filter(c => c.user_id !== user.id)
-            // If no completions left, remove the lesson entry
-            if (updated[lessonId].length === 0) {
-              delete updated[lessonId]
-            }
-          }
-          return updated
-        })
-      }
-    } catch (err) {
-      console.error('Error unmarking lesson progress:', err)
+  const getPreviousLesson = (): Lesson | null => {
+    if (!selectedLesson) return null
+    const allLessons = getAllLessonsSorted()
+    const currentIndex = allLessons.findIndex(lesson => lesson.id === selectedLesson.id)
+    if (currentIndex > 0) {
+      return allLessons[currentIndex - 1]
     }
+    return null
   }
 
-  const toggleLessonComplete = async (lessonId: string) => {
-    if (lessonProgress[lessonId]) {
-      await unmarkLessonComplete(lessonId)
-    } else {
-      await markLessonComplete(lessonId)
+  const getNextLesson = (): Lesson | null => {
+    if (!selectedLesson) return null
+    const allLessons = getAllLessonsSorted()
+    const currentIndex = allLessons.findIndex(lesson => lesson.id === selectedLesson.id)
+    if (currentIndex >= 0 && currentIndex < allLessons.length - 1) {
+      return allLessons[currentIndex + 1]
     }
+    return null
   }
 
   if (loading) {
@@ -666,47 +391,25 @@ export default function CourseDetailClient() {
                     
                     {isExpanded && (
                       <div className="ml-4 mt-2 space-y-1">
-                        {/* Lessons require previous ones to be completed */}
-                        {sectionLessons.map((lesson) => {
-                          const isAccessible = canAccessLesson(lesson.id)
-                          const isCompleted = lessonProgress[lesson.id]
-                          
-                          return (
-                            <button
-                              key={lesson.id}
-                              onClick={() => selectLesson(lesson)}
-                              disabled={!isAccessible}
-                              className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors text-left ${
-                                !isAccessible 
-                                  ? 'opacity-50 cursor-not-allowed bg-white/2' 
-                                  : selectedLesson?.id === lesson.id 
-                                    ? 'bg-white/10 hover:bg-white/10' 
-                                    : 'hover:bg-white/5'
-                              }`}
-                              title={!isAccessible ? 'Click on the "Mark as complete" button below to move to the next lesson' : ''}
-                            >
-                              <div className="flex items-center space-x-2">
-                                <Video className={`w-4 h-4 ${!isAccessible ? 'text-gray-600' : 'text-gray-400'}`} />
-                                <span className={`text-sm ${!isAccessible ? 'text-gray-500' : 'text-white'}`}>
-                                  {lesson.title}
-                                  {!isAccessible && <span className="ml-1 text-xs">🔒</span>}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                {lesson.video_duration && (
-                                  <span className="text-xs text-gray-500">
-                                    {formatDuration(lesson.video_duration)}
-                                  </span>
-                                )}
-                                {isCompleted ? (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                ) : (
-                                  <Circle className={`w-4 h-4 ${!isAccessible ? 'text-gray-600' : 'text-gray-500'}`} />
-                                )}
-                              </div>
-                            </button>
-                          )
-                        })}
+                        {sectionLessons.map((lesson) => (
+                          <button
+                            key={lesson.id}
+                            onClick={() => selectLesson(lesson)}
+                            className={`w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left ${
+                              selectedLesson?.id === lesson.id ? 'bg-white/10' : ''
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <Video className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm">{lesson.title}</span>
+                            </div>
+                            {lesson.video_duration && (
+                              <span className="text-xs text-gray-500">
+                                {formatDuration(lesson.video_duration)}
+                              </span>
+                            )}
+                          </button>
+                        ))}
                         
                         {sectionAssignments.map((assignment) => (
                           <button
@@ -811,69 +514,27 @@ export default function CourseDetailClient() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <button
-                    onClick={() => toggleLessonComplete(selectedLesson.id)}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                      lessonProgress[selectedLesson.id]
-                        ? 'bg-green-500 text-white hover:bg-green-600'
-                        : 'bg-white text-black hover:bg-gray-200'
-                    }`}
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{lessonProgress[selectedLesson.id] ? 'Mark Incomplete' : 'Mark Complete'}</span>
-                  </button>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  {/* Previous button - only disabled at first lesson, never based on completion */}
-                  <button
                     onClick={() => {
-                      const currentIndex = lessons.findIndex(l => l.id === selectedLesson.id)
-                      const prevLesson = lessons[currentIndex - 1]
-                      if (prevLesson) setSelectedLesson(prevLesson)
+                      const prevLesson = getPreviousLesson()
+                      if (prevLesson) selectLesson(prevLesson)
                     }}
-                    disabled={lessons.findIndex(l => l.id === selectedLesson.id) === 0}
+                    disabled={!getPreviousLesson()}
                     className="px-4 py-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
-                  {/* Next button - requires current lesson to be completed before allowing navigation */}
                   <button
                     onClick={() => {
-                      if (!canNavigateNext()) {
-                        alert('Click on the "Mark as complete" button below to move to the next lesson.')
-                        return
-                      }
                       const nextLesson = getNextLesson()
-                      if (nextLesson) setSelectedLesson(nextLesson)
+                      if (nextLesson) selectLesson(nextLesson)
                     }}
-                    disabled={!canNavigateNext() || lessons.findIndex(l => l.id === selectedLesson.id) === lessons.length - 1}
+                    disabled={!getNextLesson()}
                     className="px-4 py-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={!lessonProgress[selectedLesson.id] ? 'Click on the "Mark as complete" button below to move to the next lesson' : ''}
                   >
                     Next
                   </button>
                 </div>
               </div>
-
-              {/* Who Completed This Lesson - Only visible to admins */}
-              {isAdminUser && lessonCompletions[selectedLesson.id] && lessonCompletions[selectedLesson.id].length > 0 && (
-                <div className="mt-6 p-4 bg-white/5 border border-white/10 rounded-lg">
-                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <CheckCircle className="w-5 h-5 mr-2 text-green-400" />
-                    Completed by ({lessonCompletions[selectedLesson.id].length} {lessonCompletions[selectedLesson.id].length === 1 ? 'person' : 'people'})
-                  </h3>
-                  <div className="space-y-2">
-                    {lessonCompletions[selectedLesson.id].map((completion, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
-                        <span className="text-white/80">{completion.user_name}</span>
-                        <span className="text-white/50">
-                          {new Date(completion.completed_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="max-w-4xl mx-auto p-6">
